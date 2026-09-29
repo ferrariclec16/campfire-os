@@ -1,0 +1,156 @@
+// Campfire OS - Production Database Schema
+// Optimized for PostgreSQL, Supabase, Neon, or Railway
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  MENTOR
+  CREATOR_ADMIN
+}
+
+enum MembershipStatus {
+  FREE
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String
+  avatar          String?
+  role            Role             @default(STUDENT)
+  points          Int              @default(0)
+  level           Int              @default(1)
+  membershipStatus MembershipStatus @default(ACTIVE)
+  subscriptionEndsAt DateTime?
+  tossBillingKey   String?
+
+  posts           Post[]
+  comments        Comment[]
+  likes           Like[]
+  progress        LessonProgress[]
+  pointLogs       PointLog[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([points(sort: Desc)])
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category    String     @default("자유토론") // "공식 공지", "질문 & 답변", "챌린지 인증", "성과 공유"
+  title       String
+  content     String     @db.Text
+  isPinned    Boolean    @default(false)
+  likeCount   Int        @default(0)
+  commentCount Int       @default(0)
+
+  comments    Comment[]
+  likes       Like[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([category, createdAt(sort: Desc)])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model Course {
+  id          String    @id @default(cuid())
+  title       String
+  description String?   @db.Text
+  thumbnail   String?
+  minLevel    Int       @default(1) // Level required to unlock (Gamified secret content!)
+  order       Int       @default(0)
+  modules     Module[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Module {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int      @default(0)
+  lessons   Lesson[]
+  createdAt DateTime @default(now())
+}
+
+model Lesson {
+  id          String           @id @default(cuid())
+  moduleId    String
+  module      Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  videoUrl    String?
+  duration    String?          // e.g. "14:20"
+  content     String?          @db.Text
+  resources   Json?            // Array of { name, url }
+  order       Int              @default(0)
+  progress    LessonProgress[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  isCompleted Boolean  @default(true)
+  completedAt DateTime @default(now())
+
+  @@unique([userId, lessonId])
+}
+
+model LiveEvent {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  startDate   DateTime
+  zoomLink    String?
+  speaker     String?
+  createdAt   DateTime @default(now())
+}
+
+model PointLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int      // +10, +5, etc.
+  reason    String   // "글 작성", "댓글 작성", "좋아요 받음", "과제 인증"
+  createdAt DateTime @default(now())
+}
